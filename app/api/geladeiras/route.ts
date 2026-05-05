@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { turso } from "@/lib/turso-server";
+import { addLog } from "@/lib/logs";
 
 export async function GET() {
   try {
@@ -25,6 +26,8 @@ export async function POST(req: Request) {
       sql: "INSERT INTO geladeiras (id, codigo, descricao, local, criadoEm) VALUES (?, ?, ?, ?, ?)",
       args: [id, codigo, descricao, local, criadoEm],
     });
+
+    await addLog("Criar Geladeira", `Nova geladeira: ${codigo} - ${descricao} (${local})`);
 
     return NextResponse.json({ id, codigo, descricao, local, criadoEm });
   } catch (error) {

@@ -19,6 +19,13 @@ CREATE TABLE IF NOT EXISTS medicoes_diarias (
   concluida INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS logs (
+  id TEXT PRIMARY KEY,
+  acao TEXT NOT NULL,
+  detalhes TEXT NOT NULL,
+  dataHora TEXT NOT NULL
+);
+
 -- Os registros de cada medição ficam na tabela registros_temperatura,
 -- então não precisamos de uma tabela separada para os registros da medição diária.
 -- A medição diária é derivada: data, concluida (se todos os registros do dia estão presentes).

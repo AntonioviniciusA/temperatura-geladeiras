@@ -18,3 +18,10 @@ export interface MedicaoDiaria {
   concluida: boolean;
   registros: RegistroTemperatura[];
 }
+
+export interface Log {
+  id: string;
+  acao: string;
+  detalhes: string;
+  dataHora: string;
+}

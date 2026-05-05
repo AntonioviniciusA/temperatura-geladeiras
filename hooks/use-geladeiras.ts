@@ -6,34 +6,41 @@ import type {
   Geladeira,
   RegistroTemperatura,
   MedicaoDiaria,
+  Log,
 } from "@/lib/types";
 
 export function useGeladeiras() {
   const [geladeiras, setGeladeiras] = useState<Geladeira[]>([]);
   const [registros, setRegistros] = useState<RegistroTemperatura[]>([]);
+  const [logs, setLogs] = useState<Log[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const carregar = async () => {
-      try {
-        const [resGel, resReg] = await Promise.all([
-          fetch("/api/geladeiras"),
-          fetch("/api/registros"),
-        ]);
-        if (!resGel.ok || !resReg.ok) throw new Error("Erro ao carregar dados");
-        const geladeirasData = await resGel.json();
-        const registrosData = await resReg.json();
-        setGeladeiras(geladeirasData);
-        setRegistros(registrosData);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Erro desconhecido");
-      } finally {
-        setIsLoaded(true);
-      }
-    };
-    carregar();
+  const carregarDados = useCallback(async () => {
+    try {
+      const [resGel, resReg, resLogs] = await Promise.all([
+        fetch("/api/geladeiras"),
+        fetch("/api/registros"),
+        fetch("/api/logs"),
+      ]);
+      if (!resGel.ok || !resReg.ok || !resLogs.ok)
+        throw new Error("Erro ao carregar dados");
+      const geladeirasData = await resGel.json();
+      const registrosData = await resReg.json();
+      const logsData = await resLogs.json();
+      setGeladeiras(geladeirasData);
+      setRegistros(registrosData);
+      setLogs(logsData);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro desconhecido");
+    } finally {
+      setIsLoaded(true);
+    }
   }, []);
+
+  useEffect(() => {
+    carregarDados();
+  }, [carregarDados]);
 
   // Derivações (sempre atualizadas)
   const hoje = useMemo(() => new Date().toISOString().split("T")[0], []);
@@ -87,9 +94,34 @@ export function useGeladeiras() {
       if (!res.ok) throw new Error("Erro ao registrar");
       const novo = await res.json();
       setRegistros((prev) => [novo, ...prev]);
+      await carregarDados(); // Refresh logs and joined data
       return novo;
     },
-    [],
+    [carregarDados],
+  );
+
+  const atualizarRegistro = useCallback(
+    async (id: string, temperatura: number) => {
+      const res = await fetch("/api/registros", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, temperatura }),
+      });
+      if (!res.ok) throw new Error("Erro ao atualizar");
+      await carregarDados();
+    },
+    [carregarDados],
+  );
+
+  const excluirRegistro = useCallback(
+    async (id: string) => {
+      const res = await fetch(`/api/registros?id=${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Erro ao excluir");
+      await carregarDados();
+    },
+    [carregarDados],
   );
 
   const getHistoricoGeladeira = useCallback(
@@ -146,15 +178,19 @@ export function useGeladeiras() {
   return {
     geladeiras,
     registros,
+    logs,
     medicaoHoje,
     isLoaded,
     error,
     salvarGeladeira,
     removerGeladeira,
     registrarTemperatura,
+    atualizarRegistro,
+    excluirRegistro,
     getGeladeirasPendentes,
     getHistoricoGeladeira,
     getUltimaTemperatura,
     exportarCSV,
+    carregarDados,
   };
 }

@@ -11,10 +11,12 @@ export function useNotifications() {
   const [isSupported, setIsSupported] = useState(false)
 
   useEffect(() => {
-    setIsSupported("Notification" in window)
+    // Basic check without accessing Notification constructor directly if possible
+    const supported = typeof window !== "undefined" && "Notification" in window
+    setIsSupported(supported)
     
-    if ("Notification" in window) {
-      setPermission(Notification.permission)
+    if (supported) {
+      setPermission(window.Notification.permission)
     }
 
     const storedTime = localStorage.getItem(NOTIFICATION_TIME_KEY)
@@ -26,9 +28,14 @@ export function useNotifications() {
   const requestPermission = useCallback(async () => {
     if (!isSupported) return false
     
-    const result = await Notification.requestPermission()
-    setPermission(result)
-    return result === "granted"
+    try {
+      const result = await window.Notification.requestPermission()
+      setPermission(result)
+      return result === "granted"
+    } catch (e) {
+      console.error("Error requesting notification permission", e)
+      return false
+    }
   }, [isSupported])
 
   const updateNotificationTime = useCallback((time: string) => {
@@ -39,12 +46,20 @@ export function useNotifications() {
   const sendNotification = useCallback(
     (title: string, options?: NotificationOptions) => {
       if (!isSupported || permission !== "granted") return null
-      return new Notification(title, options)
+      try {
+        // Use a more defensive way to call the constructor
+        const NotificationConstructor = window.Notification
+        if (typeof NotificationConstructor === "function") {
+          return new NotificationConstructor(title, options)
+        }
+      } catch (e) {
+        console.error("Error sending notification", e)
+      }
+      return null
     },
     [isSupported, permission]
   )
 
-  // Verificar e enviar notificação diária
   useEffect(() => {
     if (!isSupported || permission !== "granted") return
 
@@ -57,7 +72,6 @@ export function useNotifications() {
       const targetTime = new Date()
       targetTime.setHours(hours, minutes, 0, 0)
 
-      // Se já passou do horário e não notificou hoje
       if (now >= targetTime && lastNotification !== today) {
         sendNotification("Hora de medir as temperaturas!", {
           body: "Não esqueça de registrar as temperaturas das geladeiras hoje.",
@@ -68,7 +82,6 @@ export function useNotifications() {
       }
     }
 
-    // Verificar imediatamente e a cada minuto
     checkAndNotify()
     const interval = setInterval(checkAndNotify, 60000)
 
