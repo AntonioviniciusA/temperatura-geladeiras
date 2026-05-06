@@ -18,19 +18,29 @@ export function useGeladeiras() {
 
   const carregarDados = useCallback(async () => {
     try {
-      const [resGel, resReg, resLogs] = await Promise.all([
+      const [resGel, resReg] = await Promise.all([
         fetch("/api/geladeiras"),
         fetch("/api/registros"),
-        fetch("/api/logs"),
       ]);
-      if (!resGel.ok || !resReg.ok || !resLogs.ok)
-        throw new Error("Erro ao carregar dados");
+      
+      if (!resGel.ok || !resReg.ok) throw new Error("Erro ao carregar dados");
+      
       const geladeirasData = await resGel.json();
       const registrosData = await resReg.json();
-      const logsData = await resLogs.json();
+      
       setGeladeiras(geladeirasData);
       setRegistros(registrosData);
-      setLogs(logsData);
+
+      // Tenta carregar logs separadamente para não quebrar tudo se falhar
+      try {
+        const resLogs = await fetch("/api/logs");
+        if (resLogs.ok) {
+          const logsData = await resLogs.json();
+          setLogs(logsData);
+        }
+      } catch (logErr) {
+        console.error("Erro ao carregar logs:", logErr);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro desconhecido");
     } finally {
