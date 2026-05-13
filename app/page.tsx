@@ -10,6 +10,8 @@ import { GeladeiraCard } from "@/components/geladeira-card";
 import { GeladeiraForm } from "@/components/geladeira-form";
 import { MedicaoWizard } from "@/components/medicao-wizard";
 import { NotificationSettings } from "@/components/notification-settings";
+import { RegistrosLogsView } from "@/components/registros-logs-view";
+import { HistoricoView } from "@/components/historico-view";
 import {
   Thermometer,
   Plus,
@@ -20,13 +22,14 @@ import {
   ChevronDown,
   ChevronUp,
   History,
+  Calendar as CalendarIcon,
 } from "lucide-react";
-import { RegistrosLogsView } from "@/components/registros-logs-view";
 
 export default function Home() {
   const [showForm, setShowForm] = useState(false);
   const [showMedicao, setShowMedicao] = useState(false);
   const [showRegistros, setShowRegistros] = useState(false);
+  const [showHistorico, setShowHistorico] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [removendoId, setRemovendoId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -41,11 +44,15 @@ export default function Home() {
     error: hookError,
     salvarGeladeira,
     removerGeladeira,
+    reordenarGeladeira,
     registrarTemperatura,
     atualizarRegistro,
     excluirRegistro,
     getGeladeirasPendentes,
+    getHistoricoGeladeira,
     getUltimaTemperatura,
+    getStatusPorGeladeira,
+    mediasPorGeladeira,
     exportarCSV,
   } = useGeladeiras();
 
@@ -81,7 +88,7 @@ export default function Home() {
   }, [geladeiras, getUltimaTemperatura]);
 
   const handleSalvarGeladeira = async (
-    data: Omit<Geladeira, "id" | "criadoEm">,
+    data: Omit<Geladeira, "id" | "criadoEm" | "ordem">,
   ) => {
     setSalvando(true);
     try {
@@ -115,6 +122,18 @@ export default function Home() {
       });
     } finally {
       setRemovendoId(null);
+    }
+  };
+
+  const handleReordenarGeladeira = async (id: string, direcao: "cima" | "baixo") => {
+    try {
+      await reordenarGeladeira(id, direcao);
+    } catch (err: any) {
+      toast({
+        title: "Erro",
+        description: err.message,
+        variant: "destructive",
+      });
     }
   };
 
@@ -195,34 +214,37 @@ export default function Home() {
           </div>
         )}
 
-        {/* Histórico e Logs */}
+        {/* Botão para Histórico */}
         <section>
-          <button
-            onClick={() => setShowRegistros(!showRegistros)}
-            className="w-full flex items-center justify-between p-4 bg-card border rounded-xl hover:bg-secondary/20 transition-colors"
-          >
-            <div className="flex items-center gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              onClick={() => setShowHistorico(true)}
+              className="flex items-center justify-center gap-2 p-4 bg-card border rounded-xl hover:bg-secondary/20 transition-colors text-primary"
+            >
+              <CalendarIcon className="w-5 h-5" />
+              <span className="font-semibold">Histórico de Registros</span>
+            </button>
+            <button
+              onClick={() => setShowRegistros(!showRegistros)}
+              className="flex items-center justify-center gap-2 p-4 bg-card border rounded-xl hover:bg-secondary/20 transition-colors"
+            >
               <History className="w-5 h-5 text-primary" />
-              <span className="font-semibold">Histórico e Logs</span>
-            </div>
-            {showRegistros ? (
-              <ChevronUp className="w-5 h-5" />
-            ) : (
-              <ChevronDown className="w-5 h-5" />
-            )}
-          </button>
-
-          {showRegistros && (
-            <div className="mt-3 animate-in fade-in slide-in-from-top-2 duration-200">
-              <RegistrosLogsView
-                registros={registros as any}
-                logs={logs}
-                onUpdate={atualizarRegistro}
-                onDelete={excluirRegistro}
-              />
-            </div>
-          )}
+              <span className="font-semibold">Logs e Auditoria</span>
+            </button>
+          </div>
         </section>
+
+        {/* Histórico e Logs (desatualizado, mantido por compatibilidade) */}
+        {showRegistros && (
+          <div className="mt-3 animate-in fade-in slide-in-from-top-2 duration-200">
+            <RegistrosLogsView
+              registros={registros as any}
+              logs={logs}
+              onUpdate={atualizarRegistro}
+              onDelete={excluirRegistro}
+            />
+          </div>
+        )}
 
         {/* Status do dia */}
         <div className="bg-card rounded-xl border border-border p-4">
@@ -303,13 +325,18 @@ export default function Home() {
                 </button>
               </div>
             ) : (
-              geladeiras.map((g) => (
+              geladeiras.map((g, index) => (
                 <GeladeiraCard
                   key={g.id}
                   geladeira={g}
                   ultimaTemperatura={ultimasTemperaturasMap.get(g.id)}
+                  mediaTemperatura={mediasPorGeladeira.get(g.id)}
+                  getStatus={getStatusPorGeladeira}
                   onRemover={handleRemoverGeladeira}
+                  onReordenar={handleReordenarGeladeira}
                   isRemovendo={removendoId === g.id}
+                  isPrimeiro={index === 0}
+                  isUltimo={index === geladeiras.length - 1}
                 />
               ))
             )}
@@ -322,6 +349,14 @@ export default function Home() {
           geladeiras={cachedPendentes}
           onRegistrar={handleRegistrarTemperatura}
           onFechar={() => setShowMedicao(false)}
+        />
+      )}
+
+      {showHistorico && (
+        <HistoricoView
+          geladeiras={geladeiras}
+          registros={registros}
+          onClose={() => setShowHistorico(false)}
         />
       )}
     </main>

@@ -4,6 +4,7 @@ export interface Geladeira {
   descricao: string;
   local: string;
   criadoEm: string;
+  ordem: number;
 }
 
 export interface RegistroTemperatura {

@@ -22,12 +22,21 @@ export function useGeladeiras() {
         fetch("/api/geladeiras"),
         fetch("/api/registros"),
       ]);
-      
+
       if (!resGel.ok || !resReg.ok) throw new Error("Erro ao carregar dados");
-      
-      const geladeirasData = await resGel.json();
+
+      let geladeirasData = await resGel.json();
       const registrosData = await resReg.json();
-      
+
+      // Garante que todas as geladeiras tenham ordem
+      geladeirasData = geladeirasData.map((g: Geladeira, i: number) => ({
+        ...g,
+        ordem: g.ordem !== undefined && g.ordem !== null ? g.ordem : i,
+      }));
+
+      // Ordena a lista por ordem
+      geladeirasData.sort((a: Geladeira, b: Geladeira) => a.ordem - b.ordem);
+
       setGeladeiras(geladeirasData);
       setRegistros(registrosData);
 
@@ -52,6 +61,52 @@ export function useGeladeiras() {
     carregarDados();
   }, [carregarDados]);
 
+  // Calcula a média de temperatura por geladeira
+  const mediasPorGeladeira = useMemo(() => {
+    const medias = new Map<string, number>();
+    geladeiras.forEach((g) => {
+      const registrosGeladeira = registros.filter(
+        (r) => r.geladeiraId === g.id,
+      );
+      if (registrosGeladeira.length > 0) {
+        const soma = registrosGeladeira.reduce(
+          (acc, r) => acc + r.temperatura,
+          0,
+        );
+        const media = soma / registrosGeladeira.length;
+        medias.set(g.id, media);
+      }
+    });
+    return medias;
+  }, [geladeiras, registros]);
+
+  // Função para obter status baseado na média da geladeira
+  const getStatusPorGeladeira = useCallback(
+    (temp: number, geladeiraId: string) => {
+      const media = mediasPorGeladeira.get(geladeiraId);
+
+      // Se não houver média (nenhum registro), usa valores padrão
+      if (media === undefined) {
+        if (temp <= -15) return { color: "text-primary", label: "Ideal" };
+        if (temp <= -10) return { color: "text-accent", label: "Aceitável" };
+        if (temp <= 0) return { color: "text-warning", label: "Atenção" };
+        return { color: "text-destructive", label: "Crítico" };
+      }
+
+      // Define faixas relativas à média:
+      // Ideal: até 2°C acima da média
+      // Aceitável: até 5°C acima da média
+      // Atenção: até 10°C acima da média
+      // Crítico: mais de 10°C acima da média
+      const diff = temp - media;
+      if (diff <= 2) return { color: "text-primary", label: "Ideal" };
+      if (diff <= 5) return { color: "text-accent", label: "Aceitável" };
+      if (diff <= 10) return { color: "text-warning", label: "Atenção" };
+      return { color: "text-destructive", label: "Crítico" };
+    },
+    [mediasPorGeladeira],
+  );
+
   // Derivações (sempre atualizadas)
   const hoje = useMemo(() => new Date().toISOString().split("T")[0], []);
   const registrosHoje = useMemo(
@@ -73,7 +128,7 @@ export function useGeladeiras() {
 
   // Operações
   const salvarGeladeira = useCallback(
-    async (data: Omit<Geladeira, "id" | "criadoEm">) => {
+    async (data: Omit<Geladeira, "id" | "criadoEm" | "ordem">) => {
       const res = await fetch("/api/geladeiras", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -81,10 +136,11 @@ export function useGeladeiras() {
       });
       if (!res.ok) throw new Error("Erro ao salvar");
       const nova = await res.json();
+      nova.ordem = geladeiras.length;
       setGeladeiras((prev) => [...prev, nova]);
       return nova;
     },
-    [],
+    [geladeiras.length],
   );
 
   const removerGeladeira = useCallback(async (id: string) => {
@@ -93,6 +149,53 @@ export function useGeladeiras() {
     setGeladeiras((prev) => prev.filter((g) => g.id !== id));
     setRegistros((prev) => prev.filter((r) => r.geladeiraId !== id));
   }, []);
+
+  const reordenarGeladeira = useCallback(
+    async (id: string, direcao: "cima" | "baixo") => {
+      const index = geladeiras.findIndex((g) => g.id === id);
+      if (index === -1) return;
+
+      let newIndex;
+      if (direcao === "cima") {
+        if (index === 0) return;
+        newIndex = index - 1;
+      } else {
+        if (index === geladeiras.length - 1) return;
+        newIndex = index + 1;
+      }
+
+      // Cria uma nova lista e troca as posições diretamente
+      const novaLista = [...geladeiras];
+      const [item] = novaLista.splice(index, 1);
+      novaLista.splice(newIndex, 0, item);
+
+      // Reatribui as ordens de forma sequencial para garantir consistência
+      const listaFinal = novaLista.map((g, i) => ({
+        ...g,
+        ordem: i,
+      }));
+
+      setGeladeiras(listaFinal);
+
+      // Salva todas as ordens no banco (garante que não haja inconsistências)
+      try {
+        await Promise.all(
+          listaFinal.map((g) =>
+            fetch("/api/geladeiras", {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id: g.id, ordem: g.ordem }),
+            }),
+          ),
+        );
+      } catch (err) {
+        // Reverte se houver erro
+        await carregarDados();
+        throw new Error("Erro ao reordenar");
+      }
+    },
+    [geladeiras, carregarDados],
+  );
 
   const registrarTemperatura = useCallback(
     async (geladeiraId: string, temperatura: number) => {
@@ -194,12 +297,15 @@ export function useGeladeiras() {
     error,
     salvarGeladeira,
     removerGeladeira,
+    reordenarGeladeira,
     registrarTemperatura,
     atualizarRegistro,
     excluirRegistro,
     getGeladeirasPendentes,
     getHistoricoGeladeira,
     getUltimaTemperatura,
+    getStatusPorGeladeira,
+    mediasPorGeladeira,
     exportarCSV,
     carregarDados,
   };
