@@ -137,9 +137,9 @@ export default function Home() {
     }
   };
 
-  const handleRegistrarTemperatura = async (id: string, temp: number) => {
+  const handleRegistrarTemperatura = async (id: string, temp: number, dataHora?: string) => {
     try {
-      await registrarTemperatura(id, temp);
+      await registrarTemperatura(id, temp, dataHora);
     } catch (err: any) {
       toast({
         title: "Erro na medição",
@@ -242,6 +242,21 @@ export default function Home() {
               logs={logs}
               onUpdate={atualizarRegistro}
               onDelete={excluirRegistro}
+              onFillMissing={async (geladeiraId: string, date: string) => {
+                const input = prompt(`Preencher temperatura para ${date} (use ponto decimal).`);
+                if (!input) return;
+                const temp = parseFloat(input.replace(',', '.'));
+                if (isNaN(temp)) {
+                  alert('Temperatura inválida');
+                  return;
+                }
+                try {
+                  await registrarTemperatura(geladeiraId, temp, date);
+                  toast({ title: 'Sucesso', description: `Registro criado para ${date}` });
+                } catch (err: any) {
+                  toast({ title: 'Erro', description: err.message, variant: 'destructive' });
+                }
+              }}
             />
           </div>
         )}

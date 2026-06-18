@@ -235,6 +235,40 @@ export function MedicaoWizard({
             </p>
           </div>
 
+          {/* Botões rápidos de temperatura */}
+          <div className="mb-4 flex items-center gap-2 flex-wrap">
+            {[-20, -18, -15, -10, 4].map((v) => (
+              <button
+                key={v}
+                onClick={() => setTemperatura(String(v))}
+                disabled={registrando}
+                className="px-3 py-1 bg-secondary/20 rounded-md text-sm"
+              >
+                {v}°
+              </button>
+            ))}
+            <button
+              onClick={() => setTemperatura((prev) => {
+                const n = parseFloat(prev || '0');
+                return String((Math.round((n - 0.5) * 10) / 10).toFixed(1));
+              })}
+              disabled={registrando}
+              className="px-2 py-1 bg-muted rounded-md text-sm"
+            >
+              -0.5
+            </button>
+            <button
+              onClick={() => setTemperatura((prev) => {
+                const n = parseFloat(prev || '0');
+                return String((Math.round((n + 0.5) * 10) / 10).toFixed(1));
+              })}
+              disabled={registrando}
+              className="px-2 py-1 bg-muted rounded-md text-sm"
+            >
+              +0.5
+            </button>
+          </div>
+
           <button
             onClick={handleRegistrar}
             disabled={!temperatura || registrando}

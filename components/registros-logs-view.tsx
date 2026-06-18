@@ -10,14 +10,60 @@ interface RegistrosLogsViewProps {
   logs: Log[];
   onUpdate: (id: string, temp: number) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  onFillMissing?: (geladeiraId: string, dateISO: string) => Promise<void>;
 }
 
-export function RegistrosLogsView({ registros, logs, onUpdate, onDelete }: RegistrosLogsViewProps) {
+export function RegistrosLogsView({ registros, logs, onUpdate, onDelete, onFillMissing }: RegistrosLogsViewProps) {
   const [activeTab, setActiveTab] = useState<"registros" | "logs">("registros");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTemp, setEditTemp] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+
+  // Cálculo de dias faltantes por geladeira para o mês atual
+  const missingByGeladeira = (() => {
+    if (!registros || registros.length === 0) return new Map<string, string[]>();
+
+    // Primeiro registro no BD
+    const first = registros.reduce((acc, r) => {
+      const d = new Date(r.dataHora);
+      if (!acc || d.getTime() < acc.getTime()) return d;
+      return acc;
+    }, null as Date | null);
+
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+
+    // Determine dia de início: usa o dia do primeiro registro no BD
+    const startDay = first ? first.getDate() : 1;
+    const startDate = new Date(today.getFullYear(), today.getMonth(), startDay);
+    if (startDate > yesterday) return new Map<string, string[]>();
+
+    // Lista de datas (YYYY-MM-DD) entre startDate e ontem
+    const dates: string[] = [];
+    for (let d = new Date(startDate); d <= yesterday; d.setDate(d.getDate() + 1)) {
+      dates.push(d.toISOString().split('T')[0]);
+    }
+
+    // Agrupa registros por geladeira e por dia
+    const byGel = new Map<string, Set<string>>();
+    registros.forEach((r) => {
+      const gid = r.geladeiraId;
+      const day = new Date(r.dataHora).toISOString().split('T')[0];
+      if (!byGel.has(gid)) byGel.set(gid, new Set());
+      byGel.get(gid)!.add(day);
+    });
+
+    // Para cada geladeira presente nos registros, ver dias faltantes
+    const missing = new Map<string, string[]>();
+    byGel.forEach((setDays, gid) => {
+      const faltantes = dates.filter((d) => !setDays.has(d));
+      if (faltantes.length > 0) missing.set(gid, faltantes);
+    });
+
+    return missing;
+  })();
 
   const handleEdit = (reg: RegistroTemperatura) => {
     setEditingId(reg.id);
@@ -79,6 +125,41 @@ export function RegistrosLogsView({ registros, logs, onUpdate, onDelete }: Regis
       <div className="p-4 max-h-[500px] overflow-y-auto">
         {activeTab === "registros" ? (
           <div className="space-y-3">
+            {missingByGeladeira.size > 0 && (
+              <div className="mb-3 p-3 bg-secondary/10 border border-border rounded-lg">
+                <h4 className="font-semibold mb-2">Dias faltantes (mês atual)</h4>
+                <div className="space-y-2">
+                  {Array.from(missingByGeladeira.entries()).map(([gid, days]) => (
+                    <div key={gid} className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium">Geladeira:</span>
+                      <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">{gid}</span>
+                      <div className="flex gap-2 flex-wrap">
+                        {days.map((d) => (
+                          <button
+                            key={d}
+                            onClick={async () => {
+                              if (!confirm(`Preencher temperatura para ${d}?`)) return;
+                              if (typeof onFillMissing === 'function') {
+                                try {
+                                  await onFillMissing(gid, d);
+                                } catch (err: any) {
+                                  toast({ title: 'Erro', description: err.message, variant: 'destructive' });
+                                }
+                              } else {
+                                toast({ title: 'Info', description: 'Função de preenchimento não disponível' });
+                              }
+                            }}
+                            className="px-2 py-1 text-sm bg-accent/10 text-accent rounded-md"
+                          >
+                            {d}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {registros.length === 0 ? (
               <p className="text-center py-8 text-muted-foreground">Nenhum registro encontrado</p>
             ) : (

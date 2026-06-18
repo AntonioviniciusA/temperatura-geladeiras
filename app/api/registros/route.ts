@@ -18,16 +18,17 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const { geladeiraId, temperatura } = await req.json();
+    const body = await req.json();
+    const { geladeiraId, temperatura, dataHora: providedDataHora } = body;
     const id = crypto.randomUUID();
-    const dataHora = new Date().toISOString();
+    const dataHora = providedDataHora ? new Date(providedDataHora).toISOString() : new Date().toISOString();
 
     await turso.execute({
       sql: "INSERT INTO registros_temperatura (id, geladeiraId, temperatura, dataHora) VALUES (?, ?, ?, ?)",
       args: [id, geladeiraId, temperatura, dataHora],
     });
 
-    await addLog("Adicionar Registro", `Novo registro para geladeira ${geladeiraId}: ${temperatura}°C`);
+    await addLog("Adicionar Registro", `Novo registro para geladeira ${geladeiraId}: ${temperatura}°C (data: ${dataHora})`);
 
     return NextResponse.json({ id, geladeiraId, temperatura, dataHora });
   } catch (error) {

@@ -198,11 +198,13 @@ export function useGeladeiras() {
   );
 
   const registrarTemperatura = useCallback(
-    async (geladeiraId: string, temperatura: number) => {
+    async (geladeiraId: string, temperatura: number, dataHora?: string) => {
+      const body: any = { geladeiraId, temperatura };
+      if (dataHora) body.dataHora = dataHora;
       const res = await fetch("/api/registros", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ geladeiraId, temperatura }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error("Erro ao registrar");
       const novo = await res.json();
