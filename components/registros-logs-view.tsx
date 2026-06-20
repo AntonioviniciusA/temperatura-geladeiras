@@ -22,7 +22,7 @@ export function RegistrosLogsView({ registros, logs, onUpdate, onDelete, onFillM
 
   // Cálculo de dias faltantes por geladeira para o mês atual
   const missingByGeladeira = (() => {
-    if (!registros || registros.length === 0) return new Map<string, string[]>();
+    if (!registros || registros.length === 0) return new Map<string, { name: string; days: string[] }>();
 
     // Primeiro registro no BD
     const first = registros.reduce((acc, r) => {
@@ -48,18 +48,27 @@ export function RegistrosLogsView({ registros, logs, onUpdate, onDelete, onFillM
 
     // Agrupa registros por geladeira e por dia
     const byGel = new Map<string, Set<string>>();
+    const geladeiraNames = new Map<string, string>();
     registros.forEach((r) => {
       const gid = r.geladeiraId;
       const day = new Date(r.dataHora).toISOString().split('T')[0];
       if (!byGel.has(gid)) byGel.set(gid, new Set());
       byGel.get(gid)!.add(day);
+      if (r.geladeiraCodigo) {
+        geladeiraNames.set(gid, r.geladeiraCodigo);
+      }
     });
 
     // Para cada geladeira presente nos registros, ver dias faltantes
-    const missing = new Map<string, string[]>();
+    const missing = new Map<string, { name: string; days: string[] }>();
     byGel.forEach((setDays, gid) => {
       const faltantes = dates.filter((d) => !setDays.has(d));
-      if (faltantes.length > 0) missing.set(gid, faltantes);
+      if (faltantes.length > 0) {
+        missing.set(gid, {
+          name: geladeiraNames.get(gid) ?? gid,
+          days: faltantes,
+        });
+      }
     });
 
     return missing;
@@ -129,12 +138,12 @@ export function RegistrosLogsView({ registros, logs, onUpdate, onDelete, onFillM
               <div className="mb-3 p-3 bg-secondary/10 border border-border rounded-lg">
                 <h4 className="font-semibold mb-2">Dias faltantes (mês atual)</h4>
                 <div className="space-y-2">
-                  {Array.from(missingByGeladeira.entries()).map(([gid, days]) => (
+                  {Array.from(missingByGeladeira.entries()).map(([gid, item]) => (
                     <div key={gid} className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-medium">Geladeira:</span>
-                      <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">{gid}</span>
+                      <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">{item.name}</span>
                       <div className="flex gap-2 flex-wrap">
-                        {days.map((d) => (
+                        {item.days.map((d) => (
                           <button
                             key={d}
                             onClick={async () => {
