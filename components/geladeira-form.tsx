@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, type ReactElement } from "react";
 import { Plus, X, Loader2 } from "lucide-react";
 
 // Tipagem explícita para os dados do formulário
@@ -20,7 +20,7 @@ export function GeladeiraForm({
   onSalvar,
   onCancelar,
   isLoading = false,
-}: GeladeiraFormProps): TSX.Element {
+}: GeladeiraFormProps): ReactElement {
   const [codigo, setCodigo] = useState("");
   const [descricao, setDescricao] = useState("");
   const [local, setLocal] = useState("");

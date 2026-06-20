@@ -1,21 +1,21 @@
 import { NextResponse } from "next/server";
-import { turso } from "@/lib/turso-server";
+import { getDb } from "@/lib/db";
+import { geladeiras, registrosTemperatura } from "@/lib/schema";
+import { eq } from "drizzle-orm";
 
 export async function GET() {
   try {
+    const db = getDb();
     const hoje = new Date().toISOString().split("T")[0];
-    const geladeirasRes = await turso.execute("SELECT id FROM geladeiras");
-    const todasIds = geladeirasRes.rows.map((row) => row.id as string);
-    const registrosRes = await turso.execute({
-      sql: "SELECT * FROM registros_temperatura WHERE DATE(dataHora) = ?",
-      args: [hoje],
-    });
-    const registros = registrosRes.rows.map((row) => ({
-      id: row.id,
-      geladeiraId: row.geladeiraId,
-      temperatura: row.temperatura,
-      dataHora: row.dataHora,
-    }));
+    const todasIds = (
+      await db.select({ id: geladeiras.id }).from(geladeiras)
+    ).map((row) => row.id);
+
+    const registros = await db
+      .select()
+      .from(registrosTemperatura)
+      .where(eq(registrosTemperatura.dataHora, hoje));
+
     const medidasIds = new Set(registros.map((r) => r.geladeiraId));
     const concluida =
       todasIds.length > 0 && todasIds.every((id) => medidasIds.has(id));

@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
-import { turso } from "@/lib/turso-server";
+import { eq, sql } from "drizzle-orm";
+import { getDb, ensureTables } from "@/lib/db";
+import { geladeiras } from "@/lib/schema";
 import { addLog } from "@/lib/logs";
-import { ensureTables } from "@/lib/turso-server";
 
 export async function GET() {
   try {
     await ensureTables();
-    const result = await turso.execute(
-      "SELECT * FROM geladeiras ORDER BY ordem ASC",
-    );
-    return NextResponse.json(result.rows);
+    const db = getDb();
+    const result = await db.select().from(geladeiras).orderBy(geladeiras.ordem);
+    return NextResponse.json(result);
   } catch (error) {
     return NextResponse.json(
       { error: "Erro ao buscar geladeiras" },
@@ -20,18 +20,23 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    const db = getDb();
     const { codigo, descricao, local } = await req.json();
     const id = crypto.randomUUID();
     const criadoEm = new Date().toISOString();
 
-    const countResult = await turso.execute(
-      "SELECT COUNT(*) as count FROM geladeiras",
-    );
-    const ordem = (countResult.rows[0] as any).count || 0;
+    const countResult = await db
+      .select({ count: sql`count(*)` })
+      .from(geladeiras);
+    const ordem = Number(countResult[0]?.count ?? 0);
 
-    await turso.execute({
-      sql: "INSERT INTO geladeiras (id, codigo, descricao, local, criadoEm, ordem) VALUES (?, ?, ?, ?, ?, ?)",
-      args: [id, codigo, descricao, local, criadoEm, ordem],
+    await db.insert(geladeiras).values({
+      id,
+      codigo,
+      descricao,
+      local,
+      criadoEm,
+      ordem,
     });
 
     await addLog(
@@ -47,12 +52,10 @@ export async function POST(req: Request) {
 
 export async function PUT(req: Request) {
   try {
+    const db = getDb();
     const { id, ordem } = await req.json();
 
-    await turso.execute({
-      sql: "UPDATE geladeiras SET ordem = ? WHERE id = ?",
-      args: [ordem, id],
-    });
+    await db.update(geladeiras).set({ ordem }).where(eq(geladeiras.id, id));
 
     return NextResponse.json({ success: true });
   } catch (error) {

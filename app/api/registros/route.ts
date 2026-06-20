@@ -1,13 +1,25 @@
 import { NextResponse } from "next/server";
-import { turso } from "@/lib/turso-server";
+import { getDb } from "@/lib/db";
+import { registrosTemperatura, geladeiras } from "@/lib/schema";
+import { eq, sql } from "drizzle-orm";
 import { addLog } from "@/lib/logs";
 
 export async function GET() {
   try {
-    const result = await turso.execute(
-      "SELECT r.*, g.codigo as geladeiraCodigo FROM registros_temperatura r JOIN geladeiras g ON r.geladeiraId = g.id ORDER BY r.dataHora DESC",
-    );
-    return NextResponse.json(result.rows);
+    const db = getDb();
+    const result = await db
+      .select({
+        id: registrosTemperatura.id,
+        geladeiraId: registrosTemperatura.geladeiraId,
+        temperatura: registrosTemperatura.temperatura,
+        dataHora: registrosTemperatura.dataHora,
+        geladeiraCodigo: geladeiras.codigo,
+      })
+      .from(registrosTemperatura)
+      .leftJoin(geladeiras, eq(registrosTemperatura.geladeiraId, geladeiras.id))
+      .orderBy(sql`${registrosTemperatura.dataHora} DESC`);
+
+    return NextResponse.json(result);
   } catch (error) {
     return NextResponse.json(
       { error: "Erro ao buscar registros" },
@@ -18,17 +30,25 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    const db = getDb();
     const body = await req.json();
     const { geladeiraId, temperatura, dataHora: providedDataHora } = body;
     const id = crypto.randomUUID();
-    const dataHora = providedDataHora ? new Date(providedDataHora).toISOString() : new Date().toISOString();
+    const dataHora = providedDataHora
+      ? new Date(providedDataHora).toISOString()
+      : new Date().toISOString();
 
-    await turso.execute({
-      sql: "INSERT INTO registros_temperatura (id, geladeiraId, temperatura, dataHora) VALUES (?, ?, ?, ?)",
-      args: [id, geladeiraId, temperatura, dataHora],
+    await db.insert(registrosTemperatura).values({
+      id,
+      geladeiraId,
+      temperatura,
+      dataHora,
     });
 
-    await addLog("Adicionar Registro", `Novo registro para geladeira ${geladeiraId}: ${temperatura}°C (data: ${dataHora})`);
+    await addLog(
+      "Adicionar Registro",
+      `Novo registro para geladeira ${geladeiraId}: ${temperatura}°C (data: ${dataHora})`,
+    );
 
     return NextResponse.json({ id, geladeiraId, temperatura, dataHora });
   } catch (error) {
@@ -38,22 +58,24 @@ export async function POST(req: Request) {
 
 export async function PUT(req: Request) {
   try {
+    const db = getDb();
     const { id, temperatura } = await req.json();
 
-    // Get old value for log
-    const oldResult = await turso.execute({
-      sql: "SELECT * FROM registros_temperatura WHERE id = ?",
-      args: [id],
-    });
-    const oldRecord = oldResult.rows[0];
+    const oldRecord = await db
+      .select()
+      .from(registrosTemperatura)
+      .where(eq(registrosTemperatura.id, id));
 
-    await turso.execute({
-      sql: "UPDATE registros_temperatura SET temperatura = ? WHERE id = ?",
-      args: [temperatura, id],
-    });
+    await db
+      .update(registrosTemperatura)
+      .set({ temperatura })
+      .where(eq(registrosTemperatura.id, id));
 
-    if (oldRecord) {
-      await addLog("Editar Registro", `Registro ${id} alterado de ${oldRecord.temperatura}°C para ${temperatura}°C`);
+    if (oldRecord[0]) {
+      await addLog(
+        "Editar Registro",
+        `Registro ${id} alterado de ${oldRecord[0].temperatura}°C para ${temperatura}°C`,
+      );
     }
 
     return NextResponse.json({ success: true });
@@ -71,20 +93,19 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ error: "ID não fornecido" }, { status: 400 });
     }
 
-    // Get value for log
-    const oldResult = await turso.execute({
-      sql: "SELECT * FROM registros_temperatura WHERE id = ?",
-      args: [id],
-    });
-    const oldRecord = oldResult.rows[0];
+    const db = getDb();
+    const oldRecord = await db
+      .select()
+      .from(registrosTemperatura)
+      .where(eq(registrosTemperatura.id, id));
 
-    await turso.execute({
-      sql: "DELETE FROM registros_temperatura WHERE id = ?",
-      args: [id],
-    });
+    await db.delete(registrosTemperatura).where(eq(registrosTemperatura.id, id));
 
-    if (oldRecord) {
-      await addLog("Excluir Registro", `Registro ${id} removido (${oldRecord.temperatura}°C)`);
+    if (oldRecord[0]) {
+      await addLog(
+        "Excluir Registro",
+        `Registro ${id} removido (${oldRecord[0].temperatura}°C)`,
+      );
     }
 
     return NextResponse.json({ success: true });

@@ -1,72 +1,36 @@
-import { sqliteTable, text, real, integer, primaryKey } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, real, integer } from 'drizzle-orm/sqlite-core';
 import { relations } from 'drizzle-orm';
 
-// Tabela de usuários
-export const users = sqliteTable('users', {
-  id: text('id').primaryKey(),
-  email: text('email').notNull().unique(),
-  name: text('name'),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-});
-
-// Tabela de geladeiras
 export const geladeiras = sqliteTable('geladeiras', {
   id: text('id').primaryKey(),
-  userId: text('user_id')
-    .notNull()
-    .references(() => users.id),
-  nome: text('nome').notNull(),
-  localizacao: text('localizacao'),
-  temperatura: real('temperatura'),
-  status: text('status').default('ativo'),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  codigo: text('codigo').notNull(),
+  descricao: text('descricao').notNull(),
+  local: text('local').notNull(),
+  criadoEm: text('criadoEm').notNull(),
+  ordem: integer('ordem').notNull().default(0),
 });
 
-// Tabela de medicões
-export const medicoes = sqliteTable('medicoes', {
+export const registrosTemperatura = sqliteTable('registros_temperatura', {
   id: text('id').primaryKey(),
-  geledeiraId: text('geladeira_id')
-    .notNull()
-    .references(() => geladeiras.id),
+  geladeiraId: text('geladeiraId').notNull().references(() => geladeiras.id),
   temperatura: real('temperatura').notNull(),
-  umidade: real('umidade'),
-  timestamp: integer('timestamp', { mode: 'timestamp' }).notNull(),
+  dataHora: text('dataHora').notNull(),
 });
 
-// Tabela de logs
 export const logs = sqliteTable('logs', {
   id: text('id').primaryKey(),
-  geledeiraId: text('geladeira_id').references(() => geladeiras.id),
-  tipo: text('tipo').notNull(),
-  mensagem: text('mensagem').notNull(),
-  timestamp: integer('timestamp', { mode: 'timestamp' }).notNull(),
+  acao: text('acao').notNull(),
+  detalhes: text('detalhes').notNull(),
+  dataHora: text('dataHora').notNull(),
 });
 
-// Relações
-export const usuariosRelations = relations(users, ({ many }) => ({
-  geladeiras: many(geladeiras),
+export const geladeirasRelations = relations(geladeiras, ({ many }) => ({
+  registros: many(registrosTemperatura),
 }));
 
-export const geladeiraasRelations = relations(geladeiras, ({ one, many }) => ({
-  usuario: one(users, {
-    fields: [geladeiras.userId],
-    references: [users.id],
-  }),
-  medicoes: many(medicoes),
-  logs: many(logs),
-}));
-
-export const medicoesRelations = relations(medicoes, ({ one }) => ({
+export const registrosRelations = relations(registrosTemperatura, ({ one }) => ({
   geladeira: one(geladeiras, {
-    fields: [medicoes.geledeiraId],
-    references: [geladeiras.id],
-  }),
-}));
-
-export const logsRelations = relations(logs, ({ one }) => ({
-  geladeira: one(geladeiras, {
-    fields: [logs.geledeiraId],
+    fields: [registrosTemperatura.geladeiraId],
     references: [geladeiras.id],
   }),
 }));

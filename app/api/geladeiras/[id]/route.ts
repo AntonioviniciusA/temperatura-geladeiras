@@ -1,28 +1,30 @@
-import { NextResponse } from "next/server";
-import { turso } from "@/lib/turso-server";
+import { NextResponse, NextRequest } from "next/server";
+import { eq } from "drizzle-orm";
+import { getDb } from "@/lib/db";
+import { geladeiras } from "@/lib/schema";
 import { addLog } from "@/lib/logs";
 
 export async function DELETE(
-  req: Request,
-  { params }: { params: { id: string } },
+  req: NextRequest,
+  context: { params: Promise<{ id: string }> },
 ) {
+  const { id } = await context.params;
   try {
-    const { id } = await params;
+    const db = getDb();
 
-    // Get info for log
-    const result = await turso.execute({
-      sql: "SELECT * FROM geladeiras WHERE id = ?",
-      args: [id],
-    });
-    const geladeira = result.rows[0];
+    const result = await db
+      .select()
+      .from(geladeiras)
+      .where(eq(geladeiras.id, id));
+    const geladeira = result[0];
 
-    await turso.execute({
-      sql: "DELETE FROM geladeiras WHERE id = ?",
-      args: [id],
-    });
+    await db.delete(geladeiras).where(eq(geladeiras.id, id));
 
     if (geladeira) {
-      await addLog("Excluir Geladeira", `Geladeira removida: ${geladeira.codigo} - ${geladeira.descricao}`);
+      await addLog(
+        "Excluir Geladeira",
+        `Geladeira removida: ${geladeira.codigo} - ${geladeira.descricao}`,
+      );
     }
 
     return NextResponse.json({ success: true });
