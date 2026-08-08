@@ -2,9 +2,12 @@ import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { logs } from "@/lib/schema";
 import { sql } from "drizzle-orm";
+import { cleanupOldLogs } from "@/lib/logs";
 
 export async function GET() {
   try {
+    await cleanupOldLogs();
+
     const db = getDb();
     const result = await db
       .select()
@@ -25,6 +28,8 @@ export async function POST(req: Request) {
     const dataHora = new Date().toISOString();
 
     await db.insert(logs).values({ id, acao, detalhes, dataHora });
+
+    await cleanupOldLogs();
 
     return NextResponse.json({ id, acao, detalhes, dataHora });
   } catch (error) {
