@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import type { Geladeira, RegistroTemperatura } from "@/lib/types";
-import { Calendar, Filter, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { Calendar, Filter, X, ChevronLeft, ChevronRight, Edit2, Trash2, Check } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -31,11 +31,14 @@ import {
   getYear,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useToast } from "@/components/ui/use-toast";
 
 interface HistoricoViewProps {
   geladeiras: Geladeira[];
   registros: RegistroTemperatura[];
   onClose: () => void;
+  onUpdate?: (id: string, temp: number) => Promise<void>;
+  onDelete?: (id: string) => Promise<void>;
 }
 
 const MESES = [
@@ -57,6 +60,8 @@ export function HistoricoView({
   geladeiras,
   registros,
   onClose,
+  onUpdate,
+  onDelete,
 }: HistoricoViewProps) {
   const [mesSelecionado, setMesSelecionado] = useState<string | null>(null);
   const [anoSelecionado, setAnoSelecionado] = useState<number>(
@@ -64,8 +69,11 @@ export function HistoricoView({
   );
   const [filtroGeladeira, setFiltroGeladeira] = useState<string>("todos");
   const [filtroDia, setFiltroDia] = useState<string>("todos");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTemp, setEditTemp] = useState<string>("");
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const { toast } = useToast();
 
-  // Calcula média por geladeira para o histórico
   const mediasPorGeladeira = useMemo(() => {
     const medias = new Map<string, number>();
     geladeiras.forEach((g) => {
@@ -84,7 +92,6 @@ export function HistoricoView({
     return medias;
   }, [geladeiras, registros]);
 
-  // Obter anos disponíveis nos registros
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<number>();
     registros.forEach((r) => {
@@ -94,7 +101,6 @@ export function HistoricoView({
     return Array.from(anos).sort((a, b) => a - b);
   }, [registros]);
 
-  // Obter meses disponíveis no ano selecionado
   const mesesDisponiveis = useMemo(() => {
     const meses = new Set<number>();
     registros.forEach((r) => {
@@ -106,7 +112,6 @@ export function HistoricoView({
     return Array.from(meses).sort((a, b) => a - b);
   }, [registros, anoSelecionado]);
 
-  // Obter dias disponíveis no mês/ano selecionado
   const diasDisponiveis = useMemo(() => {
     if (!mesSelecionado) return [];
     const dias = new Set<number>();
@@ -122,7 +127,6 @@ export function HistoricoView({
     return Array.from(dias).sort((a, b) => a - b);
   }, [registros, mesSelecionado, anoSelecionado]);
 
-  // Função para determinar o status da temperatura baseado na média da geladeira
   const getStatus = (temp: number, geladeiraId: string) => {
     const media = mediasPorGeladeira.get(geladeiraId);
 
@@ -141,7 +145,6 @@ export function HistoricoView({
     return { variant: "destructive" as const, label: "Crítico" };
   };
 
-  // Filtrar registros com base nos filtros
   const registrosFiltrados = useMemo(() => {
     if (!mesSelecionado) return [];
 
@@ -153,17 +156,14 @@ export function HistoricoView({
       .filter((r) => {
         const data = parseISO(r.dataHora);
 
-        // Filtrar por mês/ano
         if (!isWithinInterval(data, { start: inicioMes, end: fimMes })) {
           return false;
         }
 
-        // Filtrar por geladeira
         if (filtroGeladeira !== "todos" && r.geladeiraId !== filtroGeladeira) {
           return false;
         }
 
-        // Filtrar por dia
         if (filtroDia !== "todos" && data.getDate() !== parseInt(filtroDia)) {
           return false;
         }
@@ -176,7 +176,6 @@ export function HistoricoView({
       );
   }, [registros, mesSelecionado, anoSelecionado, filtroGeladeira, filtroDia]);
 
-  // Função para encontrar o nome da geladeira
   const getGeladeiraInfo = (id: string) => {
     return (
       geladeiras.find((g) => g.id === id) || {
@@ -211,9 +210,47 @@ export function HistoricoView({
     }
   };
 
+  const handleEdit = (reg: RegistroTemperatura) => {
+    setEditingId(reg.id);
+    setEditTemp(reg.temperatura.toString());
+  };
+
+  const handleSaveEdit = async (id: string) => {
+    if (!onUpdate) return;
+    const temp = parseFloat(editTemp.replace(",", "."));
+    if (isNaN(temp)) {
+      toast({ title: "Erro", description: "Temperatura inválida", variant: "destructive" });
+      return;
+    }
+    setSavingId(id);
+    try {
+      await onUpdate(id, temp);
+      setEditingId(null);
+      toast({ title: "Sucesso", description: "Registro atualizado" });
+    } catch (err: any) {
+      toast({ title: "Erro", description: err.message || "Falha ao atualizar", variant: "destructive" });
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!onDelete) return;
+    if (!confirm("Tem certeza que deseja excluir este registro?")) return;
+    setSavingId(id);
+    try {
+      await onDelete(id);
+      toast({ title: "Sucesso", description: "Registro excluído" });
+    } catch (err: any) {
+      toast({ title: "Erro", description: err.message || "Falha ao excluir", variant: "destructive" });
+    } finally {
+      setSavingId(null);
+    }
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <Card className="w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-2 sm:p-4 z-50">
+      <Card className="w-full max-w-5xl max-h-[95vh] overflow-hidden flex flex-col">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
           <CardTitle className="text-xl font-bold">
             Histórico de Registros
@@ -223,7 +260,6 @@ export function HistoricoView({
           </Button>
         </CardHeader>
         <CardContent className="flex-1 overflow-y-auto space-y-6">
-          {/* Seleção de Ano */}
           <div className="flex items-center justify-center gap-4">
             <Button
               variant="ghost"
@@ -247,7 +283,6 @@ export function HistoricoView({
             </Button>
           </div>
 
-          {/* Seleção de Meses */}
           {!mesSelecionado ? (
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
               {MESES.map((mes, index) => {
@@ -271,7 +306,6 @@ export function HistoricoView({
             </div>
           ) : (
             <div className="space-y-6">
-              {/* Botão voltar para meses */}
               <Button
                 variant="ghost"
                 className="flex items-center gap-2"
@@ -285,7 +319,6 @@ export function HistoricoView({
                 Voltar para meses
               </Button>
 
-              {/* Filtros */}
               <div className="flex flex-wrap gap-4 items-end">
                 <div className="flex-1 min-w-[200px]">
                   <label className="block text-sm font-medium mb-1">
@@ -340,7 +373,6 @@ export function HistoricoView({
                 </Button>
               </div>
 
-              {/* Tabela de registros */}
               <div className="border rounded-lg overflow-hidden">
                 <Table>
                   <TableHeader>
@@ -350,13 +382,14 @@ export function HistoricoView({
                       <TableHead>Local</TableHead>
                       <TableHead>Temperatura</TableHead>
                       <TableHead>Status</TableHead>
+                      {(onUpdate || onDelete) && <TableHead className="w-[110px]">Ações</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {registrosFiltrados.length === 0 ? (
                       <TableRow>
                         <TableCell
-                          colSpan={5}
+                          colSpan={onUpdate || onDelete ? 6 : 5}
                           className="text-center py-8 text-muted-foreground"
                         >
                           Nenhum registro encontrado para os filtros
@@ -372,8 +405,10 @@ export function HistoricoView({
                           registro.temperatura,
                           registro.geladeiraId,
                         );
+                        const isEditing = editingId === registro.id;
+                        const isSaving = savingId === registro.id;
                         return (
-                          <TableRow key={registro.id}>
+                          <TableRow key={registro.id} className={isSaving ? "opacity-50" : ""}>
                             <TableCell>
                               {format(
                                 parseISO(registro.dataHora),
@@ -386,13 +421,84 @@ export function HistoricoView({
                             </TableCell>
                             <TableCell>{geladeira.local}</TableCell>
                             <TableCell className="font-semibold">
-                              {registro.temperatura}°C
+                              {isEditing ? (
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="number"
+                                    step="0.1"
+                                    value={editTemp}
+                                    onChange={(e) => setEditTemp(e.target.value)}
+                                    className="w-20 px-2 py-1 bg-background border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                                    autoFocus
+                                    disabled={isSaving}
+                                  />
+                                  <span>°C</span>
+                                </div>
+                              ) : (
+                                <>{registro.temperatura}°C</>
+                              )}
                             </TableCell>
                             <TableCell>
                               <Badge variant={status.variant}>
                                 {status.label}
                               </Badge>
                             </TableCell>
+                            {(onUpdate || onDelete) && (
+                              <TableCell>
+                                <div className="flex items-center gap-1 justify-end">
+                                  {isEditing ? (
+                                    <>
+                                      {onUpdate && (
+                                        <Button
+                                          size="icon"
+                                          variant="default"
+                                          disabled={isSaving}
+                                          onClick={() => handleSaveEdit(registro.id)}
+                                          title="Salvar"
+                                        >
+                                          <Check className="w-4 h-4" />
+                                        </Button>
+                                      )}
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        disabled={isSaving}
+                                        onClick={() => setEditingId(null)}
+                                        title="Cancelar"
+                                      >
+                                        <X className="w-4 h-4" />
+                                      </Button>
+                                    </>
+                                  ) : (
+                                    <>
+                                      {onUpdate && (
+                                        <Button
+                                          size="icon"
+                                          variant="ghost"
+                                          disabled={isSaving}
+                                          onClick={() => handleEdit(registro)}
+                                          title="Editar temperatura"
+                                        >
+                                          <Edit2 className="w-4 h-4" />
+                                        </Button>
+                                      )}
+                                      {onDelete && (
+                                        <Button
+                                          size="icon"
+                                          variant="ghost"
+                                          disabled={isSaving}
+                                          onClick={() => handleDelete(registro.id)}
+                                          title="Excluir registro"
+                                          className="hover:bg-destructive/10 hover:text-destructive"
+                                        >
+                                          <Trash2 className="w-4 h-4" />
+                                        </Button>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                              </TableCell>
+                            )}
                           </TableRow>
                         );
                       })
