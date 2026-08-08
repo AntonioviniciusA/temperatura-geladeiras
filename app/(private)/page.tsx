@@ -1,7 +1,7 @@
 // app/page.tsx
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import type { Geladeira } from "@/lib/types";
 import { useGeladeiras } from "@/hooks/use-geladeiras";
 import { useNotifications } from "@/hooks/use-notifications";
@@ -14,6 +14,8 @@ import { RegistrosLogsView } from "@/components/registros-logs-view";
 import { HistoricoView } from "@/components/historico-view";
 import { QRCodeDialog } from "@/components/qrcode-dialog";
 import { FaltantesView } from "@/components/faltantes-view";
+import { DashboardAlertas } from "@/components/dashboard-alertas";
+import { GeladeiraDetalhes } from "@/components/geladeira-detalhes";
 import {
   Thermometer,
   Plus,
@@ -27,7 +29,12 @@ import {
   Calendar as CalendarIcon,
   QrCode,
   AlertTriangle,
+  Bell,
+  RefreshCw,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 
 export default function Home() {
   const [showForm, setShowForm] = useState(false);
@@ -36,6 +43,11 @@ export default function Home() {
   const [showHistorico, setShowHistorico] = useState(false);
   const [showQRCode, setShowQRCode] = useState(false);
   const [showFaltantes, setShowFaltantes] = useState(false);
+  const [showAlertas, setShowAlertas] = useState(false);
+  const [showDetalhesGeladeira, setShowDetalhesGeladeira] = useState(false);
+  const [detalhesGeladeiraId, setDetalhesGeladeiraId] = useState<string | null>(
+    null,
+  );
   const [salvando, setSalvando] = useState(false);
   const [removendoId, setRemovendoId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -60,12 +72,40 @@ export default function Home() {
     getStatusPorGeladeira,
     mediasPorGeladeira,
     exportarCSV,
+    carregarDados,
   } = useGeladeiras();
 
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
     window.location.reload();
   };
+
+  const handleVerDetalhesGeladeira = useCallback((geladeiraId: string) => {
+    setDetalhesGeladeiraId(geladeiraId);
+    setShowDetalhesGeladeira(true);
+    setShowAlertas(false);
+  }, []);
+
+  const handleFecharDetalhes = useCallback(() => {
+    setShowDetalhesGeladeira(false);
+    setDetalhesGeladeiraId(null);
+  }, []);
+
+  const handleRecarregarDados = useCallback(async () => {
+    try {
+      await carregarDados();
+      toast({
+        title: "Atualizado",
+        description: "Dados atualizados com sucesso",
+      });
+    } catch (err: any) {
+      toast({
+        title: "Erro",
+        description: err.message,
+        variant: "destructive",
+      });
+    }
+  }, [carregarDados, toast]);
 
   const {
     permission,
@@ -234,7 +274,20 @@ export default function Home() {
 
         {/* Botões de Ações */}
         <section>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <button
+              onClick={() => setShowAlertas(!showAlertas)}
+              className={`flex flex-col items-center justify-center gap-2 p-4 border rounded-xl transition-colors ${
+                showAlertas
+                  ? "bg-destructive/10 border-destructive/50"
+                  : "bg-card hover:bg-secondary/20"
+              }`}
+            >
+              <div className="relative">
+                <Bell className="w-5 h-5 text-destructive" />
+              </div>
+              <span className="font-semibold text-sm">Alertas</span>
+            </button>
             <button
               onClick={() => setShowHistorico(true)}
               className="flex flex-col items-center justify-center gap-2 p-4 bg-card border rounded-xl hover:bg-secondary/20 transition-colors"
@@ -265,6 +318,34 @@ export default function Home() {
             </button>
           </div>
         </section>
+
+        {/* Dashboard de Alertas */}
+        {showAlertas && !showDetalhesGeladeira && (
+          <div className="animate-in fade-in slide-in-from-top-2 duration-200">
+            <DashboardAlertas
+              geladeiras={geladeiras}
+              registros={registros}
+              onVerDetalhes={handleVerDetalhesGeladeira}
+              autoRefresh={true}
+              intervaloRefresh={5 * 60 * 1000}
+            />
+          </div>
+        )}
+
+        {/* Detalhes da Geladeira */}
+        {showDetalhesGeladeira && detalhesGeladeiraId && (
+          <div className="animate-in fade-in slide-in-from-top-2 duration-200">
+            <GeladeiraDetalhes
+              geladeira={geladeiras.find((g) => g.id === detalhesGeladeiraId)!}
+              registros={registros}
+              onVoltar={handleFecharDetalhes}
+              onNovaMedicao={() => {
+                handleFecharDetalhes();
+                setShowMedicao(true);
+              }}
+            />
+          </div>
+        )}
 
         {/* Histórico e Logs (desatualizado, mantido por compatibilidade) */}
         {showRegistros && (
@@ -390,6 +471,7 @@ export default function Home() {
                   getStatus={getStatusPorGeladeira}
                   onRemover={handleRemoverGeladeira}
                   onReordenar={handleReordenarGeladeira}
+                  onVerDetalhes={handleVerDetalhesGeladeira}
                   isRemovendo={removendoId === g.id}
                   isPrimeiro={index === 0}
                   isUltimo={index === geladeiras.length - 1}

@@ -1,14 +1,25 @@
 "use client";
 import type { Geladeira, RegistroTemperatura } from "@/lib/types";
-import { Thermometer, MapPin, Trash2, Loader2, ArrowUp, ArrowDown } from "lucide-react";
+import {
+  Thermometer,
+  MapPin,
+  Trash2,
+  Loader2,
+  ArrowUp,
+  ArrowDown,
+} from "lucide-react";
 
 interface GeladeiraCardProps {
   geladeira: Geladeira;
   ultimaTemperatura: RegistroTemperatura | null;
   mediaTemperatura?: number;
-  getStatus: (temp: number, geladeiraId: string) => { color: string; label: string };
+  getStatus: (
+    temp: number,
+    geladeiraId: string,
+  ) => { color: string; label: string };
   onRemover: (id: string) => void;
   onReordenar: (id: string, direcao: "cima" | "baixo") => void;
+  onVerDetalhes?: (id: string) => void;
   isRemovendo?: boolean;
   isPrimeiro: boolean;
   isUltimo: boolean;
@@ -21,6 +32,7 @@ export function GeladeiraCard({
   getStatus,
   onRemover,
   onReordenar,
+  onVerDetalhes,
   isRemovendo,
   isPrimeiro,
   isUltimo,
@@ -29,7 +41,18 @@ export function GeladeiraCard({
     ? getStatus(ultimaTemperatura.temperatura, geladeira.id)
     : null;
   return (
-    <div className="bg-card rounded-xl border p-5">
+    <div
+      className={`bg-card rounded-xl border p-5 ${onVerDetalhes ? "cursor-pointer hover:border-primary/50 hover:shadow-md transition-all" : ""}`}
+      onClick={() => onVerDetalhes?.(geladeira.id)}
+      role={onVerDetalhes ? "button" : undefined}
+      tabIndex={onVerDetalhes ? 0 : undefined}
+      onKeyDown={(e) => {
+        if (onVerDetalhes && (e.key === "Enter" || e.key === " ")) {
+          e.preventDefault();
+          onVerDetalhes(geladeira.id);
+        }
+      }}
+    >
       <div className="flex justify-between items-start">
         <div className="flex-1">
           <span className="text-xs bg-secondary px-2 py-0.5 rounded">
@@ -54,7 +77,9 @@ export function GeladeiraCard({
                   {ultimaTemperatura.temperatura}°C
                 </span>
               </div>
-              <span className={`text-xs ${status?.color}`}>{status?.label}</span>
+              <span className={`text-xs ${status?.color}`}>
+                {status?.label}
+              </span>
               <p className="text-xs text-muted-foreground mt-1">
                 {new Date(ultimaTemperatura.dataHora).toLocaleString("pt-BR")}
               </p>
@@ -66,7 +91,10 @@ export function GeladeiraCard({
       </div>
       <div className="flex justify-end items-center gap-2 mt-4 pt-3 border-t">
         <button
-          onClick={() => onReordenar(geladeira.id, "cima")}
+          onClick={(e) => {
+            e.stopPropagation();
+            onReordenar(geladeira.id, "cima");
+          }}
           disabled={isPrimeiro}
           className="p-1 hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed"
           title="Mover para cima"
@@ -74,7 +102,10 @@ export function GeladeiraCard({
           <ArrowUp className="w-4 h-4" />
         </button>
         <button
-          onClick={() => onReordenar(geladeira.id, "baixo")}
+          onClick={(e) => {
+            e.stopPropagation();
+            onReordenar(geladeira.id, "baixo");
+          }}
           disabled={isUltimo}
           className="p-1 hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed"
           title="Mover para baixo"
@@ -83,7 +114,10 @@ export function GeladeiraCard({
         </button>
         <div className="w-px h-4 bg-border mx-1" />
         <button
-          onClick={() => onRemover(geladeira.id)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemover(geladeira.id);
+          }}
           disabled={isRemovendo}
           className="p-1 hover:text-destructive"
           title="Remover geladeira"

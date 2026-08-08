@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { Lock, Snowflake } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -95,6 +96,15 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
               {loading ? "Verificando..." : "Entrar"}
             </button>
           </form>
+
+          <div className="mt-4 text-center">
+            <Link
+              href="/recuperar-senha"
+              className="text-sm text-primary hover:underline"
+            >
+              Esqueci minha senha
+            </Link>
+          </div>
         </div>
       </div>
     );
