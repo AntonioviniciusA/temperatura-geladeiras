@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { AuthGuard } from "@/components/auth-guard";
 import { Toaster } from "@/components/ui/toaster";
 import "./globals.css";
 
@@ -21,7 +20,7 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body className="font-sans antialiased">
-        <AuthGuard>{children}</AuthGuard>
+        {children}
         <Toaster />
       </body>
     </html>

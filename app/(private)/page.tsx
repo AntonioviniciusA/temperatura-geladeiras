@@ -12,6 +12,8 @@ import { MedicaoWizard } from "@/components/medicao-wizard";
 import { NotificationSettings } from "@/components/notification-settings";
 import { RegistrosLogsView } from "@/components/registros-logs-view";
 import { HistoricoView } from "@/components/historico-view";
+import { QRCodeDialog } from "@/components/qrcode-dialog";
+import { FaltantesView } from "@/components/faltantes-view";
 import {
   Thermometer,
   Plus,
@@ -23,6 +25,8 @@ import {
   ChevronUp,
   History,
   Calendar as CalendarIcon,
+  QrCode,
+  AlertTriangle,
 } from "lucide-react";
 
 export default function Home() {
@@ -30,6 +34,8 @@ export default function Home() {
   const [showMedicao, setShowMedicao] = useState(false);
   const [showRegistros, setShowRegistros] = useState(false);
   const [showHistorico, setShowHistorico] = useState(false);
+  const [showQRCode, setShowQRCode] = useState(false);
+  const [showFaltantes, setShowFaltantes] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [removendoId, setRemovendoId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -108,7 +114,12 @@ export default function Home() {
   };
 
   const handleRemoverGeladeira = async (id: string) => {
-    if (!confirm("Tem certeza que deseja remover esta geladeira? Todos os registros serão perdidos.")) return;
+    if (
+      !confirm(
+        "Tem certeza que deseja remover esta geladeira? Todos os registros serão perdidos.",
+      )
+    )
+      return;
     setRemovendoId(id);
     try {
       await removerGeladeira(id);
@@ -125,7 +136,10 @@ export default function Home() {
     }
   };
 
-  const handleReordenarGeladeira = async (id: string, direcao: "cima" | "baixo") => {
+  const handleReordenarGeladeira = async (
+    id: string,
+    direcao: "cima" | "baixo",
+  ) => {
     try {
       await reordenarGeladeira(id, direcao);
     } catch (err: any) {
@@ -137,7 +151,11 @@ export default function Home() {
     }
   };
 
-  const handleRegistrarTemperatura = async (id: string, temp: number, dataHora?: string) => {
+  const handleRegistrarTemperatura = async (
+    id: string,
+    temp: number,
+    dataHora?: string,
+  ) => {
     try {
       await registrarTemperatura(id, temp, dataHora);
     } catch (err: any) {
@@ -214,22 +232,36 @@ export default function Home() {
           </div>
         )}
 
-        {/* Botão para Histórico */}
+        {/* Botões de Ações */}
         <section>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <button
               onClick={() => setShowHistorico(true)}
-              className="flex items-center justify-center gap-2 p-4 bg-card border rounded-xl hover:bg-secondary/20 transition-colors text-primary"
+              className="flex flex-col items-center justify-center gap-2 p-4 bg-card border rounded-xl hover:bg-secondary/20 transition-colors"
             >
-              <CalendarIcon className="w-5 h-5" />
-              <span className="font-semibold">Histórico de Registros</span>
+              <CalendarIcon className="w-5 h-5 text-primary" />
+              <span className="font-semibold text-sm">Histórico</span>
+            </button>
+            <button
+              onClick={() => setShowFaltantes(true)}
+              className="flex flex-col items-center justify-center gap-2 p-4 bg-card border rounded-xl hover:bg-secondary/20 transition-colors"
+            >
+              <AlertTriangle className="w-5 h-5 text-warning" />
+              <span className="font-semibold text-sm">Dias Faltantes</span>
+            </button>
+            <button
+              onClick={() => setShowQRCode(true)}
+              className="flex flex-col items-center justify-center gap-2 p-4 bg-card border rounded-xl hover:bg-secondary/20 transition-colors"
+            >
+              <QrCode className="w-5 h-5 text-primary" />
+              <span className="font-semibold text-sm">QR Code</span>
             </button>
             <button
               onClick={() => setShowRegistros(!showRegistros)}
-              className="flex items-center justify-center gap-2 p-4 bg-card border rounded-xl hover:bg-secondary/20 transition-colors"
+              className="flex flex-col items-center justify-center gap-2 p-4 bg-card border rounded-xl hover:bg-secondary/20 transition-colors"
             >
               <History className="w-5 h-5 text-primary" />
-              <span className="font-semibold">Logs e Auditoria</span>
+              <span className="font-semibold text-sm">Logs</span>
             </button>
           </div>
         </section>
@@ -243,18 +275,27 @@ export default function Home() {
               onUpdate={atualizarRegistro}
               onDelete={excluirRegistro}
               onFillMissing={async (geladeiraId: string, date: string) => {
-                const input = prompt(`Preencher temperatura para ${date} (use ponto decimal).`);
+                const input = prompt(
+                  `Preencher temperatura para ${date} (use ponto decimal).`,
+                );
                 if (!input) return;
-                const temp = parseFloat(input.replace(',', '.'));
+                const temp = parseFloat(input.replace(",", "."));
                 if (isNaN(temp)) {
-                  alert('Temperatura inválida');
+                  alert("Temperatura inválida");
                   return;
                 }
                 try {
                   await registrarTemperatura(geladeiraId, temp, date);
-                  toast({ title: 'Sucesso', description: `Registro criado para ${date}` });
+                  toast({
+                    title: "Sucesso",
+                    description: `Registro criado para ${date}`,
+                  });
                 } catch (err: any) {
-                  toast({ title: 'Erro', description: err.message, variant: 'destructive' });
+                  toast({
+                    title: "Erro",
+                    description: err.message,
+                    variant: "destructive",
+                  });
                 }
               }}
             />
@@ -372,6 +413,21 @@ export default function Home() {
           geladeiras={geladeiras}
           registros={registros}
           onClose={() => setShowHistorico(false)}
+          onUpdate={atualizarRegistro}
+          onDelete={excluirRegistro}
+        />
+      )}
+
+      {showQRCode && (
+        <QRCodeDialog open={showQRCode} onClose={() => setShowQRCode(false)} />
+      )}
+
+      {showFaltantes && (
+        <FaltantesView
+          geladeiras={geladeiras}
+          registros={registros}
+          onClose={() => setShowFaltantes(false)}
+          onRegistrar={registrarTemperatura}
         />
       )}
     </main>
